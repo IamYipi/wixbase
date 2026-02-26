@@ -1,0 +1,55 @@
+name: Build and Push Docker Image
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Fetch latest versions
+        id: versions
+        run: |
+          python3 wixbase/scripts/get_versions.py
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./wixbase
+          file: ./wixbase/wixbase.dockerfile
+          push: true
+          build-args: |
+            DOTNET_VERSION=${{ env.DOTNET_VERSION }}
+            DOTNET_DOWNLOAD_URL=${{ env.DOTNET_DOWNLOAD_URL }}
+            WINE_MONO_VERSION=${{ env.WINE_MONO_VERSION }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dotnet-${{ env.DOTNET_VERSION }}-wix-latest
